@@ -140,7 +140,6 @@ void HttpStreamer::onNewTcpConnection()
         QByteArray boundary = QString("--boundary\r\n"
                                "Content-Type: image/jpeg\r\n"
                                "Content-Length: %1 \r\n\r\n").arg(QString::number(imgBytes.length())).toLocal8Bit();
-        qDebug() << "isSocketConn ? " << isSocketConnected ;
         pSocket->write(boundary);
         pSocket->write(imgBytes);
         pSocket->flush();
