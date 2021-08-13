@@ -74,34 +74,7 @@ void HttpStreamer::start(QHostAddress address, int port)
 void HttpStreamer::start(QString ipAddress, int port)
 {
     start(QHostAddress(ipAddress), port);
-
-    qDebug() << "----------start the appsink example ----------";
-    QString launchString = "";
-    QTextStream(&launchString) << "videotestsrc pattern=ball ! \
-                                   video/x-raw,width=1280,height=720,framerate=15/1 ! \
-                                   clockoverlay ! \
-                                   videoconvert ! \
-                                   jpegenc ! \
-                                   appsink max-buffers=1 drop=true name=" << APPSINK_NAME;
-
-    mpPipeline = gst_parse_launch(launchString.toStdString().c_str(), NULL);
-    gst_element_set_state (mpPipeline, GST_STATE_PLAYING);
-
-    qDebug() << "pipeline launched at " << QDateTime::currentDateTime().toString("hh:mm:ss");
-    QTimer::singleShot(3000, [&]
-    {
-        qDebug() << "pull a frame at " << QDateTime::currentDateTime().toString("hh:mm:ss");
-        QByteArray *pFrame = pullFrame();
-
-        if (pFrame != NULL)
-        {
-            saveToFile(*pFrame, "/home/inspectron/Desktop/frame.jpg");
-            delete pFrame;
-        }
-
-        qFatal("exit");
-    });
-
+    startGstPipeline();
 }
 
 /**
@@ -136,56 +109,44 @@ void HttpStreamer::onNewTcpConnection()
     QObject::connect(pSocket, &QTcpSocket::disconnected, pSocket, &QTcpSocket::deleteLater);
 
     qDebug() << "content in the socket:" << pSocket->readAll();
-
-#if 0
-    // add the header & content type
-    pSocket->write(HTTP_HEADER);
-    pSocket->write(CONTENT_TYPE_TEXT);
-    pSocket->write("hello world \r\n");
-
-    pSocket->close();
-#else
-
-    static bool a = true;
-
     qDebug() << "stream jpegs !!";
     pSocket->write(HTTP_HEADER);
     pSocket->write(CONTENT_TYPE_MJPEG);
 
     while (pSocket->isOpen())
     {
-        // get the image
-        QString src = a ? "/home/inspectron/Desktop/a.jpg" : "/home/inspectron/Desktop/b.jpg";
-        a = !a;
+        // load the image
+        QByteArray *pFrame = pullFrame();
 
-        QFile f(src);
-        if (!f.open(QIODevice::ReadOnly))
-        {
-            qCritical() << "could not open the device " << src;
-            break;
-        }
-
-        // load the image to a byte array
-        QByteArray imgBytes = f.readAll();
-
-        f.close();
-
-        qDebug() << "sending src " << src << "of size " << imgBytes.length();
-
+        QString contentLen = QString::number(pFrame->length());
         QByteArray boundary = QString("--boundary\r\n"
                                "Content-Type: image/jpeg\r\n"
-                               "Content-Length: %1 \r\n\r\n").arg(QString::number(imgBytes.length())).toLocal8Bit();
+                               "Content-Length: %1 \r\n\r\n").arg(contentLen).toLocal8Bit();
         pSocket->write(boundary);
-        pSocket->write(imgBytes);
+        pSocket->write(*pFrame);
         pSocket->flush();
 
-        QThread::msleep(500);
+        QThread::msleep(100); // dont go too fast
     }
+}
 
+/**
+ * @brief HttpStreamer::startGstPipeline - start a gstreamer pipline output to appsink
+ */
+void HttpStreamer::startGstPipeline()
+{
+    QString launchString = "";
+    QTextStream(&launchString) << "videotestsrc pattern=ball ! \
+                                   video/x-raw,width=1280,height=720,framerate=15/1 ! \
+                                   clockoverlay ! \
+                                   videoconvert ! \
+                                   jpegenc ! \
+                                   appsink max-buffers=1 drop=true name=" << APPSINK_NAME;
 
+    mpPipeline = gst_parse_launch(launchString.toStdString().c_str(), NULL);
+    gst_element_set_state (mpPipeline, GST_STATE_PLAYING);
 
-#endif
-
+    qDebug() << "gst pipeline launched at " << QDateTime::currentDateTime().toString("hh:mm:ss");
 }
 
 /**
