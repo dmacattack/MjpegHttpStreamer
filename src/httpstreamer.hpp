@@ -27,9 +27,8 @@ private slots:
     void onNewTcpConnection();
 
 private:
-    char *pullFrame();
-    void saveToFile(char* buf, int sz, QString filename);
-    void saveToFile(QByteArray buf, QString filename);
+    QByteArray *pullFrame();
+    void saveToFile(QByteArray &buf, QString filename);
 
 private:
     QTcpServer *mpTcpServer;

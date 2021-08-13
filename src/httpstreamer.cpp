@@ -91,7 +91,13 @@ void HttpStreamer::start(QString ipAddress, int port)
     QTimer::singleShot(3000, [&]
     {
         qDebug() << "pull a frame at " << QDateTime::currentDateTime().toString("hh:mm:ss");
-        pullFrame();
+        QByteArray *pFrame = pullFrame();
+
+        if (pFrame != NULL)
+        {
+            saveToFile(*pFrame, "/home/inspectron/Desktop/frame.jpg");
+            delete pFrame;
+        }
 
         qFatal("exit");
     });
@@ -184,10 +190,12 @@ void HttpStreamer::onNewTcpConnection()
 
 /**
  * @brief HttpStreamer::pullFrame - pull a frame from the appsink
- * @returns a frame from the appsink
+ * @returns a pointer frame from the appsink. caller must manage the memory
  */
-char* HttpStreamer::pullFrame()
+QByteArray* HttpStreamer::pullFrame()
 {
+    QByteArray *pFrame = NULL;
+
     // set the raw tee object for the baseclass
     GstElement *pJpegSink = gst_bin_get_by_name(GST_BIN(mpPipeline), APPSINK_NAME.toStdString().c_str());
 
@@ -197,53 +205,30 @@ char* HttpStreamer::pullFrame()
     if (pSample == NULL)
     {
         qCritical() << "appsink sample is null";
-        return NULL;
-    }
-
-    // extract the image inside the sample
-    GstBuffer *pBuf = gst_sample_get_buffer(pSample);
-    GstMapInfo map;
-    gst_buffer_map(pBuf, &map, GST_MAP_READ);
-
-    QByteArray img = QByteArray(reinterpret_cast<char*>(map.data), map.size);
-    saveToFile(img, "/home/inspectron/Desktop/frame.jpg");
-
-    // cleanup memory
-    gst_buffer_unmap(pBuf, &map);
-    gst_sample_unref(pSample);
-
-    return NULL;
-}
-
-/**
- * @brief HttpStreamer::saveToFile - save a buffer to a file
- * @param buf - buffer to save
- * @param sz - size of the buffer
- * @param filename - filename to save
- */
-void HttpStreamer::saveToFile(char *buf, int sz, QString filename)
-{
-    qDebug() << "saving buffer to a " << filename;
-    QFile f(filename);
-    if (f.open(QIODevice::WriteOnly| QIODevice::Text))
-    {
-
-        f.write(buf, sz);
-
-        f.close();
     }
     else
     {
-        qWarning() << "could not save frame to file";
+        // extract the image inside the sample
+        GstMapInfo map;
+        GstBuffer *pBuf = gst_sample_get_buffer(pSample);
+        gst_buffer_map(pBuf, &map, GST_MAP_READ);
+
+        pFrame = new QByteArray(reinterpret_cast<char*>(map.data), map.size);
+
+        // cleanup memory
+        gst_buffer_unmap(pBuf, &map);
+        gst_sample_unref(pSample);
     }
+
+    return pFrame;
 }
 
 /**
  * @brief HttpStreamer::saveToFile - save a buffer to a file
- * @param buf - qbytearray
+ * @param buf - image/frame contents
  * @param filename - filename to save
  */
-void HttpStreamer::saveToFile(QByteArray buf, QString filename)
+void HttpStreamer::saveToFile(QByteArray &buf, QString filename)
 {
     qDebug() << "saving buffer to a " << filename;
     QFile f(filename);
