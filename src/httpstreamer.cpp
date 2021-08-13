@@ -5,6 +5,10 @@
 #include <QThread>
 #include <QFile>
 #include <QDataStream>
+#include <QTimer>
+#include <QDateTime>
+#include <gst/app/gstappsrc.h>
+#include <gst/app/gstappsink.h>
 
 // anonymous namespace
 namespace
@@ -20,6 +24,8 @@ namespace
                                         "Content-Type: image/jpeg\r\n"
                                         "Content-Length: ";
 
+    const QString APPSINK_NAME = "jpegSink";
+
 }
 
 /**
@@ -27,6 +33,7 @@ namespace
  */
 HttpStreamer::HttpStreamer()
 : mpTcpServer(new QTcpServer())
+, mpPipeline(NULL)
 {
 
 }
@@ -67,6 +74,28 @@ void HttpStreamer::start(QHostAddress address, int port)
 void HttpStreamer::start(QString ipAddress, int port)
 {
     start(QHostAddress(ipAddress), port);
+
+    qDebug() << "----------start the appsink example ----------";
+    QString launchString = "";
+    QTextStream(&launchString) << "videotestsrc pattern=ball ! \
+                                   video/x-raw,width=1280,height=720,framerate=15/1 ! \
+                                   clockoverlay ! \
+                                   videoconvert ! \
+                                   jpegenc ! \
+                                   appsink max-buffers=1 drop=true name=" << APPSINK_NAME;
+
+    mpPipeline = gst_parse_launch(launchString.toStdString().c_str(), NULL);
+    gst_element_set_state (mpPipeline, GST_STATE_PLAYING);
+
+    qDebug() << "pipeline launched at " << QDateTime::currentDateTime().toString("hh:mm:ss");
+    QTimer::singleShot(3000, [&]
+    {
+        qDebug() << "pull a frame at " << QDateTime::currentDateTime().toString("hh:mm:ss");
+        pullFrame();
+
+        qFatal("exit");
+    });
+
 }
 
 /**
@@ -152,3 +181,86 @@ void HttpStreamer::onNewTcpConnection()
 #endif
 
 }
+
+/**
+ * @brief HttpStreamer::pullFrame - pull a frame from the appsink
+ * @returns a frame from the appsink
+ */
+char* HttpStreamer::pullFrame()
+{
+    // set the raw tee object for the baseclass
+    GstElement *pJpegSink = gst_bin_get_by_name(GST_BIN(mpPipeline), APPSINK_NAME.toStdString().c_str());
+
+    // get the sample
+    GstSample *pSample = gst_app_sink_pull_sample(GST_APP_SINK(pJpegSink));
+
+    if (pSample == NULL)
+    {
+        qCritical() << "appsink sample is null";
+        return NULL;
+    }
+
+    // extract the image inside the sample
+    GstBuffer *pBuf = gst_sample_get_buffer(pSample);
+    GstMapInfo map;
+    gst_buffer_map(pBuf, &map, GST_MAP_READ);
+
+    QByteArray img = QByteArray(reinterpret_cast<char*>(map.data), map.size);
+    saveToFile(img, "/home/inspectron/Desktop/frame.jpg");
+
+    // cleanup memory
+    gst_buffer_unmap(pBuf, &map);
+    gst_sample_unref(pSample);
+
+    return NULL;
+}
+
+/**
+ * @brief HttpStreamer::saveToFile - save a buffer to a file
+ * @param buf - buffer to save
+ * @param sz - size of the buffer
+ * @param filename - filename to save
+ */
+void HttpStreamer::saveToFile(char *buf, int sz, QString filename)
+{
+    qDebug() << "saving buffer to a " << filename;
+    QFile f(filename);
+    if (f.open(QIODevice::WriteOnly| QIODevice::Text))
+    {
+
+        f.write(buf, sz);
+
+        f.close();
+    }
+    else
+    {
+        qWarning() << "could not save frame to file";
+    }
+}
+
+/**
+ * @brief HttpStreamer::saveToFile - save a buffer to a file
+ * @param buf - qbytearray
+ * @param filename - filename to save
+ */
+void HttpStreamer::saveToFile(QByteArray buf, QString filename)
+{
+    qDebug() << "saving buffer to a " << filename;
+    QFile f(filename);
+    if (f.open(QIODevice::WriteOnly| QIODevice::Text))
+    {
+        f.write(buf);
+        f.close();
+    }
+    else
+    {
+        qWarning() << "could not save frame to file";
+    }
+}
+
+
+
+
+
+
+

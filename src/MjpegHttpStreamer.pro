@@ -26,3 +26,19 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 HEADERS += \
     httpstreamer.hpp
+
+
+unix {
+    LIBS += -lgstreamer-1.0 -lgobject-2.0 -lglib-2.0
+}
+
+
+unix {
+    CONFIG += link_pkgconfig
+    PKGCONFIG += gstreamer-1.0 gstreamer-app-1.0
+}
+
+
+INCLUDEPATH += /usr/include/gstreamer-1.0
+INCLUDEPATH += /usr/include/glib-2.0
+INCLUDEPATH += /usr/lib/x86_64-linux-gnu/glib-2.0
