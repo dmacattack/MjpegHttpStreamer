@@ -74,7 +74,7 @@ void HttpStreamer::start(QHostAddress address, int port)
 void HttpStreamer::start(QString ipAddress, int port)
 {
     start(QHostAddress(ipAddress), port);
-    startGstPipeline();
+    startCamGstPipeline();
 }
 
 /**
@@ -131,16 +131,32 @@ void HttpStreamer::onNewTcpConnection()
 }
 
 /**
- * @brief HttpStreamer::startGstPipeline - start a gstreamer pipline output to appsink
+ * @brief HttpStreamer::startTestGstPipeline - start a videotestsrc gstreamer pipline output to appsink
  */
-void HttpStreamer::startGstPipeline()
+void HttpStreamer::startTestGstPipeline()
 {
     QString launchString = "";
-    QTextStream(&launchString) << "videotestsrc pattern=ball ! \
+    QTextStream(&launchString) << "videotestsrc ! \
                                    video/x-raw,width=1280,height=720,framerate=15/1 ! \
                                    clockoverlay ! \
                                    videoconvert ! \
                                    jpegenc ! \
+                                   appsink max-buffers=1 drop=true name=" << APPSINK_NAME;
+
+    mpPipeline = gst_parse_launch(launchString.toStdString().c_str(), NULL);
+    gst_element_set_state (mpPipeline, GST_STATE_PLAYING);
+
+    qDebug() << "gst pipeline launched at " << QDateTime::currentDateTime().toString("hh:mm:ss");
+}
+
+/**
+ * @brief HttpStreamer::startCamGstPipeline - start a camera gstreamer pipeline output to appsink
+ */
+void HttpStreamer::startCamGstPipeline()
+{
+    QString launchString = "";
+    QTextStream(&launchString) << "v4l2src device=/dev/video0 ! \
+                                   image/jpeg,width=1280,height=720 ! \
                                    appsink max-buffers=1 drop=true name=" << APPSINK_NAME;
 
     mpPipeline = gst_parse_launch(launchString.toStdString().c_str(), NULL);

@@ -27,7 +27,8 @@ private slots:
     void onNewTcpConnection();
 
 private:
-    void startGstPipeline();
+    void startTestGstPipeline();
+    void startCamGstPipeline();
     QByteArray *pullFrame();
     void saveToFile(QByteArray &buf, QString filename);
 
