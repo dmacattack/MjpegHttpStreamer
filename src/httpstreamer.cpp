@@ -51,7 +51,9 @@ void HttpStreamer::start(QHostAddress address, int port)
     {
         QObject::connect(mpTcpServer, SIGNAL(newConnection()), this, SLOT(onNewTcpConnection()));
 
-        qDebug() << "server started listening";
+        qDebug() << "server started listening for connections at " << QString("%1:%2")
+                                                                        .arg(address.toString())
+                                                                        .arg(QString::number(port));
     }
     else
     {
@@ -98,7 +100,16 @@ void HttpStreamer::onNewTcpConnection()
     QTcpSocket *pSocket = mpTcpServer->nextPendingConnection();
 
     // delete the socket after its done
-    QObject::connect(pSocket, &QTcpSocket::disconnected, pSocket, &QTcpSocket::deleteLater);
+    QObject::connect(pSocket, &QTcpSocket::disconnected, [&]()
+    {
+        qCritical() << "socket disconnected";
+        pSocket->deleteLater();
+    });
+
+    QObject::connect(pSocket, &QTcpSocket::stateChanged, [&](QAbstractSocket::SocketState state)
+    {
+        qDebug() << "state changed to " << state;
+    });
 
     qDebug() << "content in the socket:" << pSocket->readAll();
 
@@ -120,7 +131,7 @@ void HttpStreamer::onNewTcpConnection()
     while (pSocket->isOpen())
     {
         // get the image
-        QString src = a ? "/home/inspectron/Desktop/a.jpg" : "/home/inspectron/Desktop/b.jpg";
+        QString src = a ? "/home/insp-dev2/Desktop/a.jpg" : "/home/insp-dev2/Desktop/b.jpg";
         a = !a;
 
         QFile f(src);
@@ -135,7 +146,8 @@ void HttpStreamer::onNewTcpConnection()
 
         f.close();
 
-        qDebug() << "sending src " << src << "of size " << imgBytes.length();
+        QString ptrAddress = QString("0x%1").arg((quintptr)pSocket, QT_POINTER_SIZE * 2, 16, QChar('0'));
+        qDebug() << ptrAddress << "sending src " << src << "of size " << imgBytes.length();
 
         QByteArray boundary = QString("--boundary\r\n"
                                "Content-Type: image/jpeg\r\n"
